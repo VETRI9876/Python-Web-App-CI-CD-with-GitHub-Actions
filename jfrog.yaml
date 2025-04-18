@@ -1,0 +1,5 @@
+version: 1.0
+steps:
+  package:
+    type: Docker
+    image: python-webapp:latest

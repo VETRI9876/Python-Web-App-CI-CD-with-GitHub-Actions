@@ -1,0 +1,106 @@
+name: Python Web App CI/CD Pipeline
+
+# Trigger pipeline on push to main branch
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  # Job 1: Build Docker Image
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Set up Python
+        uses: actions/setup-python@v2
+        with:
+          python-version: 3.9
+
+      - name: Install dependencies
+        run: |
+          pip install -r app/requirements.txt
+
+      - name: Build Docker Image
+        run: |
+          docker build -t python-webapp:latest .
+
+  # Job 2: Run Unit and Selenium Tests
+  test:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Install dependencies
+        run: |
+          pip install -r app/requirements.txt
+
+      - name: Install Chrome and Chromedriver (for Selenium)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y chromium-browser chromium-chromedriver
+          export PATH=$PATH:/usr/lib/chromium-browser/
+
+      - name: Run tests
+        run: |
+          python3 app/tests/test_app.py
+
+  # Job 3: Simulate Packaging with JFrog
+  package:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Simulate Package with JFrog
+        run: |
+          echo "Simulating packaging with JFrog."
+          docker tag python-webapp:latest vetri20/python-webapp:latest
+          docker login -u ${{ secrets.DOCKER_USERNAME }} -p ${{ secrets.DOCKER_PASSWORD }}
+          docker push vetri20/python-webapp:latest
+          echo "Package successfully pushed to Docker Hub."
+
+  # Job 4: Deploy to Kubernetes
+  deploy:
+    needs: package
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Set up kubectl
+        uses: azure/setup-kubectl@v1
+        with:
+          version: 'latest'
+
+      - name: Apply Kubernetes Configurations
+        run: |
+          kubectl apply -f k8s/deployment.yaml
+          kubectl apply -f k8s/service.yaml
+
+  # Job 5: Monitoring with Grafana & Prometheus
+  monitor:
+    needs: deploy
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Start Docker Compose for Monitoring Stack
+        run: |
+          docker-compose up -d --build
+          sleep 20  # Wait for Grafana and Prometheus to start
+
+      - name: Verify App Metrics Endpoint
+        run: curl http://localhost:5000/metrics
+
+      - name: Verify Prometheus Target Status
+        run: curl http://localhost:9090/targets
+
+      - name: Check Grafana Status
+        run: curl -I http://localhost:3000/login
