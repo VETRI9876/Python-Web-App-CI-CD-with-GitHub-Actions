@@ -1,6 +1,5 @@
 name: Python Web App CI/CD Pipeline
 
-# Trigger pipeline on push to main branch
 on:
   push:
     branches:
@@ -35,15 +34,33 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v2
 
+      - name: Set up Python
+        uses: actions/setup-python@v2
+        with:
+          python-version: 3.9
+
       - name: Install dependencies
         run: |
           pip install -r app/requirements.txt
 
-      - name: Install Chrome and Chromedriver (for Selenium)
+      - name: Install Google Chrome
         run: |
-          sudo apt-get update
-          sudo apt-get install -y chromium-browser chromium-chromedriver
-          export PATH=$PATH:/usr/lib/chromium-browser/
+          wget https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
+          sudo apt install -y ./google-chrome-stable_current_amd64.deb
+
+      - name: Install Chromedriver
+        run: |
+          CHROME_VERSION=$(google-chrome --version | grep -oP '\d+\.\d+\.\d+')
+          CHROMEDRIVER_VERSION=$(curl -s "https://chromedriver.storage.googleapis.com/LATEST_RELEASE_$CHROME_VERSION")
+          wget -N https://chromedriver.storage.googleapis.com/${CHROMEDRIVER_VERSION}/chromedriver_linux64.zip
+          unzip chromedriver_linux64.zip
+          sudo mv chromedriver /usr/local/bin/
+          sudo chmod +x /usr/local/bin/chromedriver
+
+      - name: Start Web App in Background
+        run: |
+          python3 app/app.py &
+          sleep 5  # wait for app to start
 
       - name: Run tests
         run: |
