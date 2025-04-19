@@ -52,7 +52,7 @@ jobs:
         run: |
           python3 app/tests/test_app.py
 
-  # Job 3: Simulate Packaging with JFrog
+  # Job 3: Package and Push Docker Image to JFrog
   package:
     needs: test
     runs-on: ubuntu-latest
@@ -60,23 +60,27 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v2
 
-      - name: Set up JFrog CLI
-        run: |
-          curl -fL https://getcli.jfrog.io | sh
-          sudo mv jfrog /usr/local/bin/
+      - name: Setup JFrog CLI
+        uses: jfrog/setup-jfrog-cli@v4
+        env:
+          JF_URL: ${{ vars.JF_URL }}
+          JF_ACCESS_TOKEN: ${{ secrets.JF_ACCESS_TOKEN }}
 
-      - name: Authenticate to JFrog
+      - name: Build, Tag, and Push Docker Image
+        env:
+          IMAGE_NAME: trialn9oork.jfrog.io/project-docker/jfrog-docker-example-image:${{ github.run_number }}
         run: |
-          jfrog rt config --url https://trialn9oork.jfrog.io/artifactory --user ${{ secrets.JFROG_USERNAME }} --password ${{ secrets.JFROG_PASSWORD }}
+          jf docker build -t $IMAGE_NAME .
+          jf docker push $IMAGE_NAME
 
-      - name: Tag Docker Image
+      - name: Publish Build Info With JFrog CLI
+        env:
+          JFROG_CLI_BUILD_NAME: jfrog-docker-build-example
+          JFROG_CLI_BUILD_NUMBER: ${{ github.run_number }}
         run: |
-          docker tag python-webapp:latest trialn9oork.jfrog.io/project-docker/python-webapp:latest
-
-      - name: Push Docker Image to JFrog Artifactory
-        run: |
-          jfrog rt docker-push trialn9oork.jfrog.io/project-docker/python-webapp:latest
-          echo "Package successfully pushed to JFrog Artifactory."
+          jf rt build-collect-env
+          jf rt build-add-git
+          jf rt build-publish
 
   # Job 4: Deploy to Kubernetes
   deploy:
